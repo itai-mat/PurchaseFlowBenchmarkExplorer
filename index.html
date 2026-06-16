@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FloraQueen Benchmark Explorer</title>
+<style>
+  :root {
+    --fq-pink: #e6007e;
+    --fq-dark: #2b2b2b;
+    --bg: #f7f5f3;
+    --card-bg: #ffffff;
+    --border: #e3ddd8;
+    --good: #2e7d32;
+    --bad: #c62828;
+    --neutral: #8a8a8a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    background: var(--bg);
+    color: var(--fq-dark);
+    line-height: 1.5;
+  }
+  header {
+    background: var(--fq-dark);
+    color: #fff;
+    padding: 20px 28px;
+  }
+  header h1 { margin: 0 0 4px; font-size: 22px; }
+  header p { margin: 0; color: #cfcfcf; font-size: 13px; }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    padding: 16px 28px 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    border: none;
+    background: transparent;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    color: var(--neutral);
+  }
+  .tab-btn.active {
+    color: var(--fq-pink);
+    border-bottom-color: var(--fq-pink);
+  }
+  .tab-btn .icon { margin-right: 6px; font-size: 15px; }
+
+  .container { padding: 20px 28px 60px; max-width: 1400px; margin: 0 auto; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Summary table */
+  .summary-wrap { overflow-x: auto; margin-bottom: 28px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; }
+  table.summary { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.summary th, table.summary td { padding: 8px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+  table.summary td { white-space: normal; vertical-align: middle; line-height: 1.3; }
+  table.summary th {
+    cursor: pointer; user-select: none; background: #faf8f6; font-weight: 600;
+    position: sticky; top: 0; white-space: nowrap; font-size: 11px;
+    text-transform: uppercase; letter-spacing: .02em; color: #555;
+  }
+  table.summary th:hover { color: var(--fq-pink); }
+  table.summary tbody tr:not(.detail-row):hover { background: #fff5fa; cursor: pointer; }
+  table.summary tbody tr.fq-row { background: #fff0f7; font-weight: 600; }
+  table.summary tbody tr:not(.detail-row) td { height: 64px; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: normal; max-width: 70px; text-align: center; line-height: 1.25; }
+  .pill.good { background: #e8f5e9; color: var(--good); }
+  .pill.bad { background: #fdecea; color: var(--bad); }
+  .pill.neutral { background: #eee; color: #666; }
+  .logo { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; border: 1px solid var(--border); display: block; background: #fff; padding: 3px; }
+  .run-cell { font-size: 11px; color: var(--neutral); text-align: right; white-space: normal; min-width: 150px; }
+  .agent-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; background: #eef2ff; color: #4338ca; margin-right: 5px; }
+  .site-cell { font-weight: 700; font-size: 13px; }
+
+  /* Info icon + tooltip */
+  .cell-wrap { display: flex; align-items: center; gap: 5px; }
+  .info-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #eee; color: var(--neutral);
+    font-size: 10px; font-style: italic; font-weight: 700;
+    cursor: help; flex-shrink: 0;
+  }
+  .info-icon:hover { background: var(--fq-pink); color: #fff; }
+  #tooltip {
+    position: fixed; z-index: 1000; max-width: 320px;
+    background: var(--fq-dark); color: #fff; font-size: 12px; line-height: 1.4;
+    padding: 8px 10px; border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    pointer-events: none; display: none;
+  }
+
+  /* Expandable detail row */
+  table.summary tbody tr.detail-row { display: none; }
+  table.summary tbody tr.detail-row.open { display: table-row; }
+  table.summary tbody tr.detail-row td {
+    background: #faf8f6;
+    cursor: default;
+    white-space: normal;
+  }
+  .expand-icon { display: inline-block; width: 14px; color: var(--fq-pink); font-weight: 700; }
+
+  .detail-content { display: flex; gap: 20px; padding: 14px 6px; align-items: flex-start; flex-wrap: wrap; }
+  .detail-gifs { display: flex; gap: 10px; flex-wrap: wrap; flex: 0 0 auto; }
+  .detail-gifs img { max-width: 280px; max-height: 320px; border-radius: 6px; border: 1px solid var(--border); background: #f0eeec; cursor: zoom-in; }
+  .detail-gifs video { max-width: 280px; max-height: 320px; border-radius: 6px; border: 1px solid var(--border); background: #f0eeec; }
+  .human-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; background: #ecfdf5; color: #047857; margin-right: 5px; }
+  .detail-gifs .empty { color: var(--neutral); font-size: 13px; font-style: italic; padding: 40px 20px; background: #f0eeec; border-radius: 6px; }
+
+  /* Fullscreen GIF lightbox */
+  #lightbox {
+    position: fixed; inset: 0; background: rgba(20,20,20,0.85);
+    display: none; align-items: center; justify-content: center;
+    z-index: 2000; cursor: zoom-out;
+  }
+  #lightbox.open { display: flex; }
+  #lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.4); }
+  .detail-info { flex: 1 1 380px; min-width: 320px; }
+  .detail-info dl { margin: 0; display: grid; grid-template-columns: 130px 1fr; gap: 6px 10px; font-size: 13px; }
+  .detail-info dt { color: var(--neutral); font-size: 12px; }
+  .detail-info dd { margin: 0; }
+  .detail-info .synthesis { margin-top: 10px; padding: 10px; background: #fff; border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; color: #444; }
+
+  footer { text-align: center; padding: 24px; color: var(--neutral); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>FloraQueen Purchase-Flow Benchmark Explorer</h1>
+  <p>Side-by-side run captures vs. comparison data — Phase 1 benchmark, June 2026</p>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="mobile"><span class="icon">📱</span>Mobile runs (6)</button>
+  <button class="tab-btn" data-tab="desktop"><span class="icon">🖥️</span>Desktop runs (5)</button>
+</div>
+
+<div class="container">
+
+  <div class="tab-panel" id="panel-desktop">
+    <div class="summary-wrap">
+      <table class="summary" id="table-desktop">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tab-panel active" id="panel-mobile">
+    <div class="summary-wrap">
+      <table class="summary" id="table-mobile">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<footer>Built for quick visual comparison — full row detail and methodology in <em>Benchmark Comparison.md</em> and individual run logs.</footer>
+
+<div id="tooltip"></div>
+<div id="lightbox"><img id="lightbox-img" src="" alt=""></div>
+
+<script>
+const GIF_DIR = "GIF Captures/";
+const VIDEO_DIR = "VideoCaptures/";
+
+const DESKTOP = [
+  {
+    site: "FloraQueen", domain: "floraqueen.com", run: "Rerun — 2026-06-11 (desktop)", isFQ: true,
+    price: "€53.90", deliveryCost: "€8.90 (Year of Smiles, pre-selected)", total: "€80.60", inflation: "+49.5%", inflationClass: "bad",
+    upsell: "Vase + card pre-selected in cart by default",
+    loyalty: "\"A Year of Smiles\" (€8.90) pre-selected as shipping option",
+    account: "No (guest)", steps: "4 screens after PDP",
+    occasion: "Mismatch — Birthday filter surfaces \"Thinking Of You / Recovery / Thoughtful\" tags",
+    delivery: "Date + shipping cost shown only after full address",
+    fields: "8 fields; country defaulted wrong (Romania)",
+    gifs: [],
+    synthesis: "Baseline FloraQueen pattern: highest inflation of any run (+49.5%) driven entirely by pre-selected add-ons (vase, card, Year of Smiles). No competitor pre-selects upsells the way FloraQueen does."
+  },
+  {
+    site: "Interflora", domain: "interflora.co.uk", run: "2026-06-13 (desktop, .co.uk / GBP)",
+    price: "£38.00", deliveryCost: "£10.00", total: "£48.00", inflation: "0%", inflationClass: "good",
+    upsell: "Gold/Platinum loyalty subscription (opt-in, 3 touchpoints) + Finishing Touches product upsell (Chocolate Truffles £6, opt-in)",
+    loyalty: "Present, never pre-selected — 1st competitor (1/3) with a loyalty offer",
+    account: "No — guest to payment page", steps: "6 screens after PDP",
+    occasion: "Accurate — required Occasion dropdown, validation-enforced",
+    delivery: "Delivery cost (£10) shown with delivery options before basket; total carried to payment",
+    fields: "Name, address, phone (UK-specific)",
+    gifs: ["interflora-uk-mobile-discovery.gif", "interflora-uk-mobile-checkout.gif"],
+    synthesis: "First competitor to show any subscription upsell — but always opt-in across 3 touchpoints, never pre-selected. Required-Occasion dropdown is a clean fix for occasion-tag accuracy that FloraQueen lacks. 0% inflation vs FloraQueen's 49.5%."
+  },
+  {
+    site: "1-800-Flowers", domain: "1800flowers.com", run: "2026-06-13 (desktop, USD)",
+    price: "$41.99 (default $89.99)", deliveryCost: "$22.22 (fees + taxes combined)", total: "$64.21", inflation: "+53%", inflationClass: "bad",
+    upsell: "Variant defaults to premium tier ($89.99 vs $41.99, +114% if uncorrected) + Celebrations Passport subscription (opt-in, 2 touchpoints)",
+    loyalty: "Celebrations Passport — opt-in, never pre-selected",
+    account: "No — guest to payment page, sign-in optional", steps: "4 screens after PDP — fewest of any run",
+    occasion: "Accurate — dedicated \"Birthday\" top-nav category",
+    delivery: "Delivery fees/taxes ($22.22) shown only at payment page — no earlier preview",
+    fields: "Name, address (autocomplete), apt/suite, phone",
+    gifs: ["1800flowers-discovery.gif", "1800flowers-checkout.gif"],
+    synthesis: "+53% inflation is entirely delivery/tax (0% from upsells) — but the default variant is a +114% trap if a shopper doesn't manually downgrade. Fewest steps to product of any run."
+  },
+  {
+    site: "Serenata Flowers", domain: "serenataflowers.com", run: "2026-06-13 (desktop, GBP) — Discovery only, blocked",
+    price: "£44.99", deliveryCost: "Advertised as FREE (Standard)", total: "Not reached", inflation: "—", inflationClass: "neutral",
+    upsell: "Not reached",
+    loyalty: "Not observed (Discovery only)",
+    account: "Not reached", steps: "Blocked — \"Send Now\" CTA unresponsive",
+    occasion: "Accurate — dedicated \"Birthday Flowers\" category",
+    delivery: "PDP advertises \"Standard Delivery is FREE\" (unconfirmed)",
+    fields: "Not reached",
+    gifs: ["serenata-discovery.gif"],
+    synthesis: "Run incomplete — the \"Send Now\" CTA (a Vue component) was unresponsive to all tested click methods. Discovery stage shows accurate occasion tagging and a competitive £44.99 price."
+  },
+  {
+    site: "Aquarelle", domain: "aquarelle.es", run: "2026-06-13 (desktop, .es, EUR) — blocked at login",
+    price: "€45.00 (cheaper €37 available)", deliveryCost: "€6.99", total: "Not reached (cart €51.99)", inflation: "0% observed", inflationClass: "neutral",
+    upsell: "Variant defaults to pricier in-range tier (€45 vs €37); subscription perk advertised only on account-creation path",
+    loyalty: "Account-creation perk only, not offered to guests",
+    account: "No — guest \"Fast checkout\" present but non-functional", steps: "Blocked — guest CONTINUE on /login did not advance",
+    occasion: "Not assessed",
+    delivery: "Full total (€51.99 incl. €6.99 delivery) shown immediately on add-to-cart — earliest of any run",
+    fields: "Not reached",
+    gifs: ["aquarelle-benchmark-run.gif"],
+    synthesis: "Strongest early-transparency of any run (full total shown at add-to-cart), but checkout is blocked at /login for guests — also found a cart-reset-on-destination-change defect. Blocker reproduced again on mobile rerun."
+  },
+];
+
+const MOBILE = [
+  {
+    site: "FloraQueen", domain: "floraqueen.com", run: "Human run — 2026-06-10", isFQ: true, runType: "Human",
+    price: "€59.90", deliveryCost: "€14.90 (Year of Smiles, pre-selected) vs €12.90 Regular", total: "€74.80", inflation: "+24.9%", inflationClass: "bad",
+    upsell: "Browsed several discounted products (e.g. €77.90→€59.90, \"Infinite Strength\" €68.90) before settling — \"A Year of Smiles\" pre-selected over Regular at +€2.00",
+    loyalty: "\"A Year of Smiles\" (€14.90) pre-selected as default shipping option — same standing default as agent runs, but priced higher here (€14.90 vs €8.90)",
+    account: "No (guest, card via 3-D Secure)", steps: "~9 steps incl. browsing, recipient form, country-triggered cart reset, delivery date, payment + bank-app 3DS verification — most of any run",
+    occasion: "Not tracked — no occasion filter/tag used this run (entry was via homepage hero, not a gifting occasion search)",
+    delivery: "Delivery cost only resolved after full address + date; changing the recipient country reset the cart and showed: \"These products cannot be delivered to the selected country. Please choose a supported delivery country or remove the items from your cart.\" Order summary total fluctuated €83.90 → €74.80 before settling.",
+    fields: "Country/Region, recipient first+last name, street (autocomplete), apartment, postal code, city, phone, order message — 8 fields (order message is a delivery note only, not a gift card message)",
+    gifs: [],
+    video: "FloraQueen_FirstPurchase_30fps.mp4",
+    synthesis: "First human-led run, confirms two issues from agent runs plus new ones: (1) the country-change cart-reset error from NOTES.md reproduces verbatim — switching recipient country wipes the selected delivery date and throws a \"cannot be delivered\" error even when the destination is valid; (2) checkout total is unstable mid-flow (€83.90→€74.80), which reads as untrustworthy; (3) \"A Year of Smiles\" remains pre-selected (3rd+ confirmation) but at a higher €14.90 here vs €8.90 in agent runs — pricing for the same upsell varies by session/destination; (4) payment required leaving the browser for a banking app 3-D Secure step, adding an app-switch most automated runs don't capture; (5) post-delivery, the only \"message\" field at checkout (\"Add a message to your order\") is a note to FloraQueen for the delivery, not a gift card message — the recipient's physical card arrived blank, since no field on mobile lets the sender write a personal note for the recipient. +24.9% inflation, all from the pre-selected delivery upgrade."
+  },
+  {
+    site: "FloraQueen", domain: "floraqueen.com", run: "Mobile baseline — 2026-06-12", isFQ: true,
+    price: "€53.90 (default €59.90 Premium)", deliveryCost: "€8.90 (Year of Smiles, pre-selected)", total: "€62.80", inflation: "+16.5%", inflationClass: "bad",
+    upsell: "Variant defaults to Premium €59.90 over Classic €53.90; add-ons interstitial did not appear this run",
+    loyalty: "\"A Year of Smiles\" (€8.90) pre-selected as default shipping option — 3rd run confirming standing default",
+    account: "No (guest)", steps: "2 screens after PDP (no add-ons interstitial)",
+    occasion: "Mismatch — PDP tags \"Romantic Partners / Celebration Organizers / Thoughtful Givers\", no \"Birthday\"",
+    delivery: "Date + shipping cost shown together after full address",
+    fields: "8 fields; country defaulted to United States (3rd different default across runs)",
+    gifs: ["floraqueen-mobile-discovery.gif", "floraqueen-mobile-checkout.gif"],
+    synthesis: "Mobile baseline still shows +16.5% inflation from the pre-selected Year of Smiles default — 3rd consecutive run confirming this is a standing default, not a one-off."
+  },
+  {
+    site: "Moonpig", domain: "moonpig.com", run: "Mobile, full run — 2026-06-12",
+    price: "€36.99 (Birthday Brights)", deliveryCost: "€5.49", total: "€42.48", inflation: "0%", inflationClass: "good",
+    upsell: "PDP add-on (teddy €9.99) + free-card interstitial, both opt-in, neither pre-selected",
+    loyalty: "None — no subscription/recurring offer anywhere in checkout",
+    account: "Yes — mandatory sign-in to view basket; delivery is Ireland-only", steps: "4 screens after basket",
+    occasion: "Accurate — explicitly birthday-named/tagged",
+    delivery: "Delivery date (4 options, all €5.49) + cost + carrier shown together pre-payment",
+    fields: "6 fields + country selector; proactive address-verification step",
+    gifs: ["moonpig-mobile-discovery.gif", "moonpig-mobile-checkout.gif"],
+    synthesis: "0% inflation and accurate occasion tagging, but the only run requiring mandatory sign-in to even view the basket — a real account-wall friction point."
+  },
+  {
+    site: "Bloom & Wild", domain: "bloomandwild.com", run: "Mobile, full run — 2026-06-13",
+    price: "€49.95 (Alea Maxi & Geburtstagkuchen)", deliveryCost: "€5.95", total: "€55.90", inflation: "0%", inflationClass: "good",
+    upsell: "Free greeting-card interstitial (pre-selected, €0) + optional message field, neither paid nor pre-added",
+    loyalty: "None — only a non-pre-selected \"send more flowers, save €5\" cross-sell banner",
+    account: "No — reached payment page entirely as guest (cleanest guest path of any run)", steps: "5 screens after PDP",
+    occasion: "Accurate — found via dedicated \"Geburtstag\" occasion filter",
+    delivery: "Full order total (incl. €5.95 delivery) shown before address entry — earliest transparency tied with Aquarelle",
+    fields: "2 fields (recipient name + address via modal) — fewest of any run",
+    gifs: ["bloomandwild-mobile.gif", "bloomandwild-mobile-checkout-completion.gif"],
+    synthesis: "Best-in-class guest checkout: 0% inflation, fewest form fields, earliest full-total transparency, and a working price-band filter combinable with occasion filter."
+  },
+  {
+    site: "Interflora", domain: "interflora.co.uk", run: "Mobile rerun — 2026-06-13",
+    price: "£45.00 (Bright Hatbox Flowers)", deliveryCost: "£7.50", total: "£52.50", inflation: "0%", inflationClass: "good",
+    upsell: "Gold/Platinum loyalty offer, opt-in — 2 new touchpoints on mobile (basket £12, payment £4.50-more)",
+    loyalty: "Present, never pre-selected — 4 touchpoints total across desktop+mobile",
+    account: "No — guest to payment page", steps: "Basket → contact → billing → payment (matches desktop)",
+    occasion: "Accurate — required Occasion dropdown reproduces on mobile (MUI Select pattern)",
+    delivery: "Delivery (£7.50) included in basket total before contact/billing steps",
+    fields: "Not separately tracked this run (pre-filled from prior session)",
+    gifs: ["interflora-mobile-rerun.gif"],
+    synthesis: "True mobile rerun confirms the required-Occasion dropdown and Gold/Platinum loyalty banners work identically on mobile, with 2 additional loyalty touchpoints found — now 4 total, all opt-in."
+  },
+  {
+    site: "1-800-Flowers", domain: "1800flowers.com", run: "Mobile rerun — 2026-06-13",
+    price: "$41.99 (default $89.99)", deliveryCost: "$22.22", total: "$64.21", inflation: "+53% (identical to desktop)", inflationClass: "bad",
+    upsell: "Variant defaults to premium ($89.99 vs $41.99, +114% if uncorrected, reproduces) + Celebrations Passport (2nd touchpoint confirmed on cart page)",
+    loyalty: "Celebrations Passport, opt-in — reproduces on mobile",
+    account: "No — guest to payment page", steps: "Shipping → order review → payment (reproduces desktop)",
+    occasion: "Accurate (reproduces desktop)",
+    delivery: "Delivery fees/taxes ($22.22) shown only at payment page — reproduces desktop",
+    fields: "First/last name, address, phone + relationship (required select — no \"Friend\" option, used \"Boyfriend\")",
+    gifs: ["1800flowers-mobile-rerun.gif"],
+    synthesis: "Exact total match with desktop ($64.21) — every desktop finding reproduces on mobile. New finding: required \"relationship\" dropdown has no generic \"Friend\" option, a minor persona-fit gap."
+  },
+  {
+    site: "Aquarelle", domain: "aquarelle.es", run: "Mobile rerun — 2026-06-13 — blocked at /login",
+    price: "€45.00 (cheaper €37 available, reproduces)", deliveryCost: "€6.99", total: "Not reached (cart €51.99)", inflation: "0% observed", inflationClass: "neutral",
+    upsell: "Variant defaults to pricier in-range tier (€45 vs €37) — reproduces on mobile",
+    loyalty: "Account-creation perk only, not pre-selected — same as desktop",
+    account: "No — guest \"Fast checkout\" present but non-functional on mobile too", steps: "Blocked at /login — same boundary as desktop",
+    occasion: "Not assessed",
+    delivery: "Full total (€51.99 incl. €6.99 delivery) shown immediately on add-to-cart — reproduces desktop",
+    fields: "Not reached",
+    gifs: ["aquarelle-mobile-rerun.gif"],
+    synthesis: "Same /login guest-checkout blocker reproduces on a second device profile — increases confidence this is a real Aquarelle defect, not an automation quirk. Cart-reset-on-destination-change did NOT reproduce (session-state-dependent)."
+  },
+];
+
+function inflationPill(label, cls) {
+  return `<span class="pill ${cls}">${label}</span>`;
+}
+
+const COLS = 12; // number of columns in the summary row, for colspan on detail row
+
+function esc(str) {
+  return String(str).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function withInfo(valueHtml, tip) {
+  if (!tip) return valueHtml;
+  return `<div class="cell-wrap">${valueHtml}<span class="info-icon" data-tip="${esc(tip)}">i</span></div>`;
+}
+
+function occasionPill(text) {
+  if (/^Accurate/i.test(text)) return `<span class="pill good">Accurate</span>`;
+  if (/^Mismatch/i.test(text)) return `<span class="pill bad">Mismatch</span>`;
+  return `<span class="pill neutral">Not assessed</span>`;
+}
+
+function accountPill(text) {
+  const short = text.split(" — ")[0].trim();
+  if (/^Yes/i.test(short)) return `<span class="pill bad">${short}</span>`;
+  if (/^No/i.test(short)) return `<span class="pill good">${short}</span>`;
+  return `<span class="pill neutral">${short}</span>`;
+}
+
+function buildSummary(data, tableId) {
+  const table = document.getElementById(tableId);
+  const thead = table.querySelector("thead");
+  const tbody = table.querySelector("tbody");
+  thead.innerHTML = `<tr>
+    <th></th>
+    <th></th>
+    <th data-key="site">Site</th>
+    <th data-key="steps">Steps</th>
+    <th data-key="loyalty">Loyalty offer</th>
+    <th data-key="price">Product price</th>
+    <th data-key="deliveryCost">Delivery cost</th>
+    <th data-key="total">Total at boundary</th>
+    <th data-key="inflation">Inflation</th>
+    <th data-key="occasion">Occasion tag</th>
+    <th data-key="account">Account?</th>
+    <th data-key="run">Run</th>
+  </tr>`;
+
+  function render(rows) {
+    tbody.innerHTML = rows.map((d, i) => `
+      <tr data-idx="${i}" class="${d.isFQ ? 'fq-row' : ''}">
+        <td><span class="expand-icon">▶</span></td>
+        <td><img class="logo" src="https://www.google.com/s2/favicons?domain=${d.domain}&sz=64" alt="${d.site} logo" loading="lazy"></td>
+        <td class="site-cell">${d.site}</td>
+        <td>${withInfo(d.steps, d.fields)}</td>
+        <td>${withInfo(d.loyalty.split(" — ")[0].split(",")[0], d.loyalty)}</td>
+        <td>${withInfo(d.price, d.upsell)}</td>
+        <td>${withInfo(d.deliveryCost, d.delivery)}</td>
+        <td>${withInfo(d.total, d.delivery)}</td>
+        <td>${withInfo(inflationPill(d.inflation, d.inflationClass), d.upsell)}</td>
+        <td>${withInfo(occasionPill(d.occasion), d.occasion)}</td>
+        <td>${withInfo(accountPill(d.account), d.account)}</td>
+        <td class="run-cell">${d.runType === "Human" ? '<span class="human-tag">Human</span>' : '<span class="agent-tag">Agent</span>'}${d.run}</td>
+      </tr>
+      <tr class="detail-row" data-idx="${i}">
+        <td colspan="${COLS}">
+          <div class="detail-content">
+            <div class="detail-gifs">
+              ${d.gifs.length || d.video
+                ? d.gifs.map(g => `<img src="${GIF_DIR}${g}" alt="${d.site} ${d.run}" loading="lazy">`).join("")
+                  + (d.video ? `<video src="${VIDEO_DIR}${d.video}" controls preload="metadata"></video>` : "")
+                : `<div class="empty">No capture available</div>`}
+            </div>
+            <div class="detail-info">
+              <dl>
+                <dt>Occasion accuracy</dt><dd>${d.occasion}</dd>
+                <dt>Upsell pattern</dt><dd>${d.upsell}</dd>
+                <dt>Loyalty offer</dt><dd>${d.loyalty}</dd>
+                <dt>Delivery transparency</dt><dd>${d.delivery}</dd>
+                <dt>Recipient form</dt><dd>${d.fields}</dd>
+                <dt>Steps</dt><dd>${d.steps}</dd>
+                <dt>Account required?</dt><dd>${d.account}</dd>
+              </dl>
+              <div class="synthesis">${d.synthesis}</div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    `).join("");
+  }
+  render(data);
+
+  // sorting
+  let sortKey = null, sortAsc = true;
+  thead.querySelectorAll("th[data-key]").forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.key;
+      sortAsc = (sortKey === key) ? !sortAsc : true;
+      sortKey = key;
+      const sorted = [...data].sort((a, b) => {
+        let av = (a[key] || "").toString().replace(/[^0-9.\-]/g, "");
+        let bv = (b[key] || "").toString().replace(/[^0-9.\-]/g, "");
+        const an = parseFloat(av), bn = parseFloat(bv);
+        let cmp;
+        if (!isNaN(an) && !isNaN(bn) && av !== "" && bv !== "") {
+          cmp = an - bn;
+        } else {
+          cmp = (a[key] || "").toString().localeCompare((b[key] || "").toString());
+        }
+        return sortAsc ? cmp : -cmp;
+      });
+      render(sorted);
+    });
+  });
+
+  // click row -> toggle its detail row
+  tbody.addEventListener("click", (e) => {
+    const tr = e.target.closest("tr");
+    if (!tr || tr.classList.contains("detail-row")) return;
+    const idx = tr.dataset.idx;
+    const detail = tbody.querySelector(`tr.detail-row[data-idx="${idx}"]`);
+    const icon = tr.querySelector(".expand-icon");
+    if (detail) {
+      const open = detail.classList.toggle("open");
+      icon.textContent = open ? "▼" : "▶";
+    }
+  });
+}
+
+buildSummary(DESKTOP, "table-desktop");
+buildSummary(MOBILE, "table-mobile");
+
+// Tooltip handling (event delegation, works for dynamically-built tables)
+const tooltip = document.getElementById("tooltip");
+document.addEventListener("mouseover", (e) => {
+  const icon = e.target.closest(".info-icon");
+  if (!icon) return;
+  tooltip.textContent = icon.dataset.tip;
+  tooltip.style.display = "block";
+  positionTooltip(e, icon);
+});
+document.addEventListener("mousemove", (e) => {
+  if (tooltip.style.display === "block" && e.target.closest(".info-icon")) {
+    positionTooltip(e, e.target.closest(".info-icon"));
+  }
+});
+document.addEventListener("mouseout", (e) => {
+  if (e.target.closest(".info-icon")) tooltip.style.display = "none";
+});
+function positionTooltip(e, icon) {
+  const pad = 12;
+  let x = e.clientX + pad;
+  let y = e.clientY + pad;
+  const rect = tooltip.getBoundingClientRect();
+  if (x + rect.width > window.innerWidth) x = e.clientX - rect.width - pad;
+  if (y + rect.height > window.innerHeight) y = e.clientY - rect.height - pad;
+  tooltip.style.left = x + "px";
+  tooltip.style.top = y + "px";
+}
+
+// Lightbox for full-screen GIF viewing
+const lightbox = document.getElementById("lightbox");
+const lightboxImg = document.getElementById("lightbox-img");
+document.addEventListener("click", (e) => {
+  const img = e.target.closest(".detail-gifs img");
+  if (img) {
+    lightboxImg.src = img.src;
+    lightboxImg.alt = img.alt;
+    lightbox.classList.add("open");
+    return;
+  }
+  if (e.target.closest("#lightbox")) {
+    lightbox.classList.remove("open");
+    lightboxImg.src = "";
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { lightbox.classList.remove("open"); lightboxImg.src = ""; }
+});
+
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(`panel-${btn.dataset.tab}`).classList.add("active");
+  });
+});
+</script>
+
+</body>
+</html>
